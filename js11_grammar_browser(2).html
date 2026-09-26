@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JavaScript 1.1 Grammar Browser & Precise AST Inspector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Fira Code', 'monospace'],
+          },
+          colors: {
+            dark: {
+              900: '#0a0c10',
+              800: '#12161f',
+              700: '#1a202c',
+              600: '#2d3748',
+              border: '#2a3241'
+            },
+            light: {
+              50: '#f8fafc',
+              100: '#f1f5f9',
+              200: '#e2e8f0',
+              300: '#cbd5e1',
+              400: '#94a3b8',
+              800: '#1e293b',
+              900: '#0f172a',
+              border: '#cbd5e1'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    pre, code, .font-mono {
+      font-family: 'Fira Code', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track { background: transparent; }
+    .dark ::-webkit-scrollbar-thumb { background: #2a3241; border-radius: 3px; }
+    html:not(.dark) ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b82f6 !important; }
+
+    @keyframes pulseGlowDark {
+      0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); border-color: #3b82f6; }
+      50% { box-shadow: 0 0 18px 4px rgba(59, 130, 246, 0.4); border-color: #60a5fa; }
+      100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); border-color: #2a3241; }
+    }
+    @keyframes pulseGlowLight {
+      0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); border-color: #2563eb; }
+      50% { box-shadow: 0 0 16px 3px rgba(37, 99, 235, 0.3); border-color: #3b82f6; }
+      100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); border-color: #cbd5e1; }
+    }
+
+    .dark .rule-highlight {
+      animation: pulseGlowDark 2s ease-out;
+      border-color: #3b82f6 !important;
+      background-color: rgba(59, 130, 246, 0.12) !important;
+    }
+    html:not(.dark) .rule-highlight {
+      animation: pulseGlowLight 2s ease-out;
+      border-color: #2563eb !important;
+      background-color: rgba(37, 99, 235, 0.08) !important;
+    }
+
+    .nt-token {
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-block;
+    }
+    .dark .nt-token { color: #60a5fa; background: rgba(96, 165, 250, 0.12); border: 1px solid rgba(96, 165, 250, 0.25); }
+    html:not(.dark) .nt-token { color: #1d4ed8; background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.25); }
+    .nt-token:hover { transform: translateY(-1px); }
+
+    .t-token { border-radius: 4px; padding: 1px 5px; font-weight: 600; display: inline-block; }
+    .dark .t-token { color: #f472b6; background: rgba(244, 114, 182, 0.1); border: 1px solid rgba(244, 114, 182, 0.2); }
+    html:not(.dark) .t-token { color: #db2777; background: rgba(219, 39, 119, 0.08); border: 1px solid rgba(219, 39, 119, 0.2); }
+
+    .dark .kw-token { color: #c084fc; font-weight: 700; }
+    html:not(.dark) .kw-token { color: #7e22ce; font-weight: 700; }
+
+    .dark .op-token { color: #34d399; font-weight: bold; }
+    html:not(.dark) .op-token { color: #047857; font-weight: bold; }
+
+    .ast-tree-node {
+      position: relative;
+      padding-left: 1rem;
+      border-left: 1px solid rgba(148, 163, 184, 0.2);
+    }
+  </style>
+</head>
+
+<body class="h-screen w-screen flex flex-col bg-slate-100 dark:bg-dark-900 text-slate-800 dark:text-slate-200 antialiased">
+
+  <header class="h-14 bg-white dark:bg-dark-800 border-b border-slate-200 dark:border-dark-border px-4 flex items-center justify-between shrink-0 z-30 transition-colors">
+    <div class="flex items-center space-x-3">
+      <div class="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-black shadow-md shadow-blue-500/20">
+        <i class="fa-solid fa-sitemap text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base tracking-wide text-slate-900 dark:text-white flex items-center gap-2">
+          JS 1.1 Grammar Browser <span class="text-xs bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20 font-medium">Full AST Parser</span>
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Accurate Lexer, Recursive-Descent Grammar Inspector & Canvas</p>
+      </div>
+    </div>
+
+    <!-- View Mode Buttons -->
+    <div class="flex items-center space-x-2 bg-slate-100 dark:bg-dark-900 p-1 rounded-lg border border-slate-200 dark:border-dark-border">
+      <button id="viewBtnCards" onclick="switchMainView('cards')" class="px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all bg-blue-600 text-white shadow">
+        <i class="fa-solid fa-book"></i> EBNF Spec
+      </button>
+      <button id="viewBtnPlayground" onclick="switchMainView('playground')" class="px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all text-slate-600 dark:text-slate-400">
+        <i class="fa-solid fa-code"></i> AST Inspector
+      </button>
+      <button id="viewBtnGraph" onclick="switchMainView('graph')" class="px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all text-slate-600 dark:text-slate-400">
+        <i class="fa-solid fa-diagram-project"></i> Grammar Graph
+      </button>
+    </div>
+
+    <!-- Controls & Theme Toggle -->
+    <div class="flex items-center space-x-2">
+      <button id="themeToggleBtn" onclick="toggleTheme()" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-100 dark:bg-dark-700 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition flex items-center gap-2 text-xs font-medium">
+        <i id="themeIcon" class="fa-solid fa-moon text-amber-400"></i>
+        <span id="themeLabel" class="hidden sm:inline">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="h-9 bg-slate-200/70 dark:bg-dark-900 border-b border-slate-200 dark:border-dark-border/60 px-4 flex items-center justify-between text-xs shrink-0 z-20">
+    <div class="flex items-center space-x-2 overflow-x-auto py-1" id="breadcrumbContainer">
+      <button id="btnNavBack" onclick="navigateHistory(-1)" disabled class="text-slate-400 dark:text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 p-1">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <button id="btnNavForward" onclick="navigateHistory(1)" disabled class="text-slate-400 dark:text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 p-1">
+        <i class="fa-solid fa-arrow-right"></i>
+      </button>
+      <span class="text-slate-300 dark:text-dark-border">|</span>
+      <div id="breadcrumbsList" class="flex items-center space-x-1 text-slate-600 dark:text-slate-400"></div>
+    </div>
+    <div class="text-[11px] text-slate-500">JS 1.1 Precedence & Production Mapping Active</div>
+  </div>
+
+  <div class="flex flex-1 overflow-hidden relative">
+
+    <!-- Sidebar Rules Nav -->
+    <aside class="w-72 bg-white dark:bg-dark-800 border-r border-slate-200 dark:border-dark-border flex flex-col shrink-0">
+      <div class="p-3 border-b border-slate-200 dark:border-dark-border">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+          <input type="text" id="searchInput" oninput="filterRules()" placeholder="Filter rules..."
+            class="w-full bg-slate-100 dark:bg-dark-900 border border-slate-200 dark:border-dark-border rounded-lg pl-8 pr-8 py-1.5 text-xs focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
+      <div class="p-2 border-b border-slate-200 dark:border-dark-border flex gap-1 text-[11px] overflow-x-auto">
+        <button onclick="setCategoryFilter('all')" id="cat-all" class="cat-btn bg-blue-600 text-white px-2 py-1 rounded">All</button>
+        <button onclick="setCategoryFilter('Statement')" id="cat-Statement" class="cat-btn text-slate-600 dark:text-slate-400 px-2 py-1 rounded">Statements</button>
+        <button onclick="setCategoryFilter('Expression')" id="cat-Expression" class="cat-btn text-slate-600 dark:text-slate-400 px-2 py-1 rounded">Expressions</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2 space-y-0.5" id="sidebarRuleList"></div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 bg-slate-50 dark:bg-dark-900 relative overflow-hidden flex flex-col">
+
+      <!-- View 1: Rule Spec Cards -->
+      <div id="cardsView" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+        <div class="max-w-5xl mx-auto space-y-6" id="ruleCardsContainer"></div>
+      </div>
+
+      <!-- View 2: Accurate AST & Grammar Derivation Inspector -->
+      <div id="playgroundView" class="hidden flex-1 overflow-y-auto p-4 md:p-6">
+        <div class="max-w-6xl mx-auto space-y-6">
+          
+          <!-- Code Editor Box -->
+          <div class="bg-white dark:bg-dark-800 rounded-xl border border-slate-200 dark:border-dark-border p-5 shadow-lg">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fa-solid fa-code-commit text-blue-500"></i> JS 1.1 Source Code Inspector
+              </h2>
+              <span class="text-xs text-slate-500">Click any token to inspect its exact Grammar Derivation Path</span>
+            </div>
+
+            <textarea id="codeInspectorInput" rows="5"
+              class="w-full bg-slate-900 text-blue-300 border border-slate-700 rounded-lg p-3 font-mono text-xs focus:outline-none focus:border-blue-500"
+              placeholder="Enter JS 1.1 Code...">var count = 10;
+if (count > 5) {
+  var total = count + 20 * 2;
+  function getMessage() {
+    return total;
+  }
+}</textarea>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
+              <div class="flex gap-2">
+                <button onclick="loadSampleCode(1)" class="text-xs bg-slate-100 dark:bg-dark-700 px-2.5 py-1 rounded border border-slate-200 dark:border-dark-border">Sample: Var & If</button>
+                <button onclick="loadSampleCode(2)" class="text-xs bg-slate-100 dark:bg-dark-700 px-2.5 py-1 rounded border border-slate-200 dark:border-dark-border">Sample: Function & Return</button>
+                <button onclick="loadSampleCode(3)" class="text-xs bg-slate-100 dark:bg-dark-700 px-2.5 py-1 rounded border border-slate-200 dark:border-dark-border">Sample: Expression Precedence</button>
+              </div>
+              <button onclick="parseAndInspectCode()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow flex items-center gap-2">
+                <i class="fa-solid fa-play"></i> Parse & Build Accurate AST
+              </button>
+            </div>
+          </div>
+
+          <!-- Derivation Path Banner -->
+          <div id="derivationPathBox" class="hidden bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+            <div class="text-xs font-bold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-route"></i> Exact Grammar Derivation Path
+            </div>
+            <div id="derivationPathContent" class="flex flex-wrap items-center gap-1.5 font-mono text-xs"></div>
+          </div>
+
+          <!-- Parsed Tokens & AST Visualizer Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Exact Token Stream -->
+            <div class="bg-white dark:bg-dark-800 rounded-xl border border-slate-200 dark:border-dark-border p-5 shadow-lg space-y-3">
+              <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                <span>Exact Lexer Tokens</span>
+                <span id="tokenCountBadge" class="text-blue-500">0 Tokens</span>
+              </h3>
+              <div id="inspectorTokensOutput" class="flex flex-wrap gap-1.5 p-3 bg-slate-50 dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-border min-h-[140px] max-h-[360px] overflow-y-auto"></div>
+            </div>
+
+            <!-- Interactive AST Tree -->
+            <div class="bg-white dark:bg-dark-800 rounded-xl border border-slate-200 dark:border-dark-border p-5 shadow-lg space-y-3">
+              <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Grammar AST Parse Tree</h3>
+              <div id="astTreeOutput" class="p-3 bg-slate-50 dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-dark-border font-mono text-xs overflow-x-auto min-h-[140px] max-h-[360px] overflow-y-auto"></div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- View 3: Canvas Graph View -->
+      <div id="graphView" class="hidden absolute inset-0 flex flex-col bg-slate-100 dark:bg-dark-900">
+        <div class="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white/90 dark:bg-dark-800/90 backdrop-blur p-2 rounded-lg border border-slate-200 dark:border-dark-border shadow-xl">
+          <button class="px-2 py-1 text-xs bg-slate-100 dark:bg-dark-700 rounded" onclick="zoomGraph(1.2)"><i class="fa-solid fa-plus"></i></button>
+          <button class="px-2 py-1 text-xs bg-slate-100 dark:bg-dark-700 rounded" onclick="zoomGraph(0.8)"><i class="fa-solid fa-minus"></i></button>
+          <button class="px-2 py-1 text-xs bg-slate-100 dark:bg-dark-700 rounded" onclick="resetGraphView()"><i class="fa-solid fa-expand"></i></button>
+          <span id="graphNodeFocusText" class="text-xs font-mono px-2 text-blue-500">Focus: Program</span>
+        </div>
+        <canvas id="grammarCanvas" class="w-full h-full cursor-grab"></canvas>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // JS 1.1 Specification Definition DB
+    const GRAMMAR_DATA = [
+      { id: "Program", category: "Declaration", summary: "Root entry point for a JS 1.1 script.", def: "SourceElements?" },
+      { id: "SourceElements", category: "Declaration", summary: "Sequence of statements or declarations.", def: "SourceElement | SourceElements SourceElement" },
+      { id: "SourceElement", category: "Declaration", summary: "Statement or Function Declaration.", def: "Statement | FunctionDeclaration" },
+      { id: "Statement", category: "Statement", summary: "Core JS 1.1 executable statements.", def: "Block | VariableStatement | EmptyStatement | ExpressionStatement | IfStatement | IterationStatement | ContinueStatement | BreakStatement | ReturnStatement | WithStatement" },
+      { id: "Block", category: "Statement", summary: "Enclosed statements inside curly braces.", def: "'{' StatementList? '}'" },
+      { id: "StatementList", category: "Statement", summary: "One or more statements executed in sequence.", def: "Statement | StatementList Statement" },
+      { id: "VariableStatement", category: "Statement", summary: "Declares variables using 'var'.", def: "'var' VariableDeclarationList ';'" },
+      { id: "VariableDeclarationList", category: "Statement", summary: "Comma-separated variable declarations.", def: "VariableDeclaration | VariableDeclarationList ',' VariableDeclaration" },
+      { id: "VariableDeclaration", category: "Statement", summary: "Variable name and optional initializer.", def: "Identifier Initializer?" },
+      { id: "Initializer", category: "Statement", summary: "Assignment initializer expression.", def: "'=' AssignmentExpression" },
+      { id: "EmptyStatement", category: "Statement", summary: "Empty semicolon statement.", def: "';'" },
+      { id: "ExpressionStatement", category: "Statement", summary: "Standalone expression evaluated as a statement.", def: "Expression ';'" },
+      { id: "IfStatement", category: "Statement", summary: "Conditional execution block.", def: "'if' '(' Expression ')' Statement ('else' Statement)?" },
+      { id: "IterationStatement", category: "Statement", summary: "While and For loops in JS 1.1.", def: "'while' '(' Expression ')' Statement\n| 'for' '(' Expression? ';' Expression? ';' Expression? ')' Statement\n| 'for' '(' 'var' VariableDeclarationList ';' Expression? ';' Expression? ')' Statement" },
+      { id: "ContinueStatement", category: "Statement", summary: "Continues loop iteration.", def: "'continue' ';'" },
+      { id: "BreakStatement", category: "Statement", summary: "Breaks loop execution.", def: "'break' ';'" },
+      { id: "ReturnStatement", category: "Statement", summary: "Returns a value from a function.", def: "'return' Expression? ';'" },
+      { id: "WithStatement", category: "Statement", summary: "Extends scope chain.", def: "'with' '(' Expression ')' Statement" },
+      { id: "FunctionDeclaration", category: "Declaration", summary: "Named function definition.", def: "'function' Identifier '(' FormalParameterList? ')' '{' FunctionBody '}'" },
+      { id: "FormalParameterList", category: "Declaration", summary: "Comma-separated function parameters.", def: "Identifier | FormalParameterList ',' Identifier" },
+      { id: "FunctionBody", category: "Declaration", summary: "Function inner source code elements.", def: "SourceElements?" },
+      { id: "Expression", category: "Expression", summary: "Comma-separated expression sequence.", def: "AssignmentExpression | Expression ',' AssignmentExpression" },
+      { id: "AssignmentExpression", category: "Expression", summary: "Assignment operation or conditional expression.", def: "ConditionalExpression | LeftHandSideExpression AssignmentOperator AssignmentExpression" },
+      { id: "AssignmentOperator", category: "Expression", summary: "Operators: =, +=, -=, *=, /=, %=, <<=, >>=, >>>=, &=, ^=, |=", def: "'=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='" },
+      { id: "ConditionalExpression", category: "Expression", summary: "Ternary operator: cond ? a : b", def: "LogicalORExpression | LogicalORExpression '?' AssignmentExpression ':' AssignmentExpression" },
+      { id: "LogicalORExpression", category: "Expression", summary: "Logical OR (||) operator.", def: "LogicalANDExpression | LogicalORExpression '||' LogicalANDExpression" },
+      { id: "LogicalANDExpression", category: "Expression", summary: "Logical AND (&&) operator.", def: "BitwiseORExpression | LogicalANDExpression '&&' BitwiseORExpression" },
+      { id: "BitwiseORExpression", category: "Expression", summary: "Bitwise OR (|) operator.", def: "BitwiseXORExpression | BitwiseORExpression '|' BitwiseXORExpression" },
+      { id: "BitwiseXORExpression", category: "Expression", summary: "Bitwise XOR (^) operator.", def: "BitwiseANDExpression | BitwiseXORExpression '^' BitwiseANDExpression" },
+      { id: "BitwiseANDExpression", category: "Expression", summary: "Bitwise AND (&) operator.", def: "EqualityExpression | BitwiseANDExpression '&' EqualityExpression" },
+      { id: "EqualityExpression", category: "Expression", summary: "Equality checks: ==, !=", def: "RelationalExpression | EqualityExpression '==' RelationalExpression | EqualityExpression '!=' RelationalExpression" },
+      { id: "RelationalExpression", category: "Expression", summary: "Comparisons: <, >, <=, >=", def: "ShiftExpression | RelationalExpression '<' ShiftExpression | RelationalExpression '>' ShiftExpression" },
+      { id: "ShiftExpression", category: "Expression", summary: "Bitwise shifts: <<, >>, >>>", def: "AdditiveExpression | ShiftExpression '<<' AdditiveExpression | ShiftExpression '>>' AdditiveExpression | ShiftExpression '>>>' AdditiveExpression" },
+      { id: "AdditiveExpression", category: "Expression", summary: "Addition (+) and Subtraction (-).", def: "MultiplicativeExpression | AdditiveExpression '+' MultiplicativeExpression | AdditiveExpression '-' MultiplicativeExpression" },
+      { id: "MultiplicativeExpression", category: "Expression", summary: "Multiplication (*), Division (/), Modulo (%).", def: "UnaryExpression | MultiplicativeExpression '*' UnaryExpression | MultiplicativeExpression '/' UnaryExpression | MultiplicativeExpression '%' UnaryExpression" },
+      { id: "UnaryExpression", category: "Expression", summary: "Unary operators: delete, void, typeof, ++, --, +, -, ~, !", def: "PostfixExpression | 'delete' UnaryExpression | 'void' UnaryExpression | 'typeof' UnaryExpression | '++' UnaryExpression | '--' UnaryExpression | '+' UnaryExpression | '-' UnaryExpression | '~' UnaryExpression | '!' UnaryExpression" },
+      { id: "PostfixExpression", category: "Expression", summary: "Postfix increment/decrement ++/--", def: "LeftHandSideExpression | LeftHandSideExpression '++' | LeftHandSideExpression '--'" },
+      { id: "LeftHandSideExpression", category: "Expression", summary: "New expressions or function calls.", def: "NewExpression | CallExpression" },
+      { id: "NewExpression", category: "Expression", summary: "Object constructor call using 'new'.", def: "MemberExpression | 'new' NewExpression" },
+      { id: "CallExpression", category: "Expression", summary: "Function call or property access.", def: "MemberExpression Arguments | CallExpression Arguments | CallExpression '[' Expression ']' | CallExpression '.' Identifier" },
+      { id: "MemberExpression", category: "Expression", summary: "Primary value or object member access.", def: "PrimaryExpression | MemberExpression '[' Expression ']' | MemberExpression '.' Identifier" },
+      { id: "Arguments", category: "Expression", summary: "Call argument list in parentheses.", def: "'(' ArgumentList? ')'" },
+      { id: "ArgumentList", category: "Expression", summary: "Comma-separated arguments.", def: "AssignmentExpression | ArgumentList ',' AssignmentExpression" },
+      { id: "PrimaryExpression", category: "Expression", summary: "Primary primitives, identifiers, and literals.", def: "'this' | Identifier | Literal | ArrayLiteral | ObjectLiteral | '(' Expression ')'" },
+      { id: "Literal", category: "Literal", summary: "Literal values supported in JS 1.1.", def: "NullLiteral | BooleanLiteral | NumericLiteral | StringLiteral" },
+      { id: "NullLiteral", category: "Literal", summary: "The null literal value.", def: "'null'" },
+      { id: "BooleanLiteral", category: "Literal", summary: "Boolean true or false.", def: "'true' | 'false'" },
+      { id: "NumericLiteral", category: "Literal", summary: "Numeric decimal or hex value.", def: "DecimalLiteral | HexLiteral" },
+      { id: "StringLiteral", category: "Literal", summary: "String quoted in ' or \".", def: "'...' | \"...\"" },
+      { id: "Identifier", category: "Primary", summary: "Variable name identifier token.", def: "[a-zA-Z_$][a-zA-Z0-9_$]*" }
+    ];
+
+    const ruleSet = new Set(GRAMMAR_DATA.map(g => g.id));
+    const ruleMap = new Map(GRAMMAR_DATA.map(g => [g.id, g]));
+
+    let isDarkMode = true;
+    let currentView = 'cards';
+    let historyStack = [];
+    let historyPointer = -1;
+    let activeFilterCategory = 'all';
+
+    let parsedAstRoot = null;
+    let parsedTokensList = [];
+
+    // Canvas State
+    let canvas, ctx;
+    let graphNodes = [];
+    let graphEdges = [];
+    let activeGraphNodeId = 'Program';
+    let camera = { x: 0, y: 0, zoom: 1 };
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderSidebarList();
+      renderCardsView();
+      initGraphCanvas();
+      jumpToRule('Program', false);
+      parseAndInspectCode();
+    });
+
+    function lexJS11(code) {
+      const tokens = [];
+      let i = 0;
+      const keywords = new Set(['var', 'function', 'if', 'else', 'for', 'while', 'continue', 'break', 'return', 'with', 'new', 'delete', 'void', 'typeof', 'this', 'null', 'true', 'false']);
+
+      while (i < code.length) {
+        let ch = code[i];
+
+        // Whitespace
+        if (/\s/.test(ch)) {
+          i++;
+          continue;
+        }
+
+        // Single-line comment
+        if (ch === '/' && code[i + 1] === '/') {
+          i += 2;
+          while (i < code.length && code[i] !== '\n') i++;
+          continue;
+        }
+
+        // Multi-line comment
+        if (ch === '/' && code[i + 1] === '*') {
+          i += 2;
+          while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) i++;
+          i += 2;
+          continue;
+        }
+
+        // Strings
+        if (ch === '"' || ch === "'") {
+          const quote = ch;
+          const start = i;
+          i++;
+          while (i < code.length && code[i] !== quote && code[i] !== '\n') {
+            if (code[i] === '\\') i++;
+            i++;
+          }
+          if (i < code.length) i++;
+          const val = code.slice(start, i);
+          tokens.push({ type: 'STRING', value: val, start, end: i });
+          continue;
+        }
+
+        // Numbers
+        if (/\d/.test(ch) || (ch === '.' && /\d/.test(code[i + 1] || ''))) {
+          const start = i;
+          if (ch === '0' && (code[i + 1] === 'x' || code[i + 1] === 'X')) {
+            i += 2;
+            while (i < code.length && /[0-9a-fA-F]/.test(code[i])) i++;
+          } else {
+            while (i < code.length && /[\d.]/.test(code[i])) i++;
+          }
+          const val = code.slice(start, i);
+          tokens.push({ type: 'NUMBER', value: val, start, end: i });
+          continue;
+        }
+
+        // Identifiers & Keywords
+        if (/[a-zA-Z_$]/.test(ch)) {
+          const start = i;
+          while (i < code.length && /[a-zA-Z0-9_$]/.test(code[i])) i++;
+          const val = code.slice(start, i);
+          const type = keywords.has(val) ? 'KEYWORD' : 'IDENT';
+          tokens.push({ type, value: val, start, end: i });
+          continue;
+        }
+
+        // Multi-char Operators
+        const twoChar = code.slice(i, i + 2);
+        const threeChar = code.slice(i, i + 3);
+
+        if (['>>>=', '<<='].includes(threeChar)) {
+          tokens.push({ type: 'OP', value: threeChar, start: i, end: i + 3 });
+          i += 3;
+          continue;
+        }
+
+        if (['==', '!=', '<=', '>=', '&&', '||', '++', '--', '<<', '>>', '+=', '-=', '*=', '/=', '%=', '&=', '^=', '|='].includes(twoChar)) {
+          tokens.push({ type: 'OP', value: twoChar, start: i, end: i + 2 });
+          i += 2;
+          continue;
+        }
+
+        // Single-char Punctuator/Operator
+        if ("+-*/%^&|!~=<>?:;,.(){}[]".includes(ch)) {
+          tokens.push({ type: 'PUNCT', value: ch, start: i, end: i + 1 });
+          i++;
+          continue;
+        }
+
+        // Unknown character fallback
+        i++;
+      }
+
+      tokens.push({ type: 'EOF', value: '', start: code.length, end: code.length });
+      return tokens;
+    }
+
+    class JS11Parser {
+      constructor(tokens) {
+        this.tokens = tokens;
+        this.pos = 0;
+      }
+
+      peek() { return this.tokens[this.pos] || { type: 'EOF', value: '' }; }
+      consume() { return this.tokens[this.pos++]; }
+      match(val) {
+        if (this.peek().value === val) {
+          return this.consume();
+        }
+        return null;
+      }
+
+      createNode(rule, children = [], token = null) {
+        return { rule, children, token };
+      }
+
+      parseProgram() {
+        const children = [];
+        while (this.peek().type !== 'EOF') {
+          const se = this.parseSourceElement();
+          if (se) children.push(se);
+          else this.consume(); // Advance past errors
+        }
+        return this.createNode('Program', [
+          this.createNode('SourceElements', children)
+        ]);
+      }
+
+      parseSourceElement() {
+        if (this.peek().value === 'function') {
+          return this.createNode('SourceElement', [this.parseFunctionDeclaration()]);
+        }
+        const stmt = this.parseStatement();
+        return stmt ? this.createNode('SourceElement', [stmt]) : null;
+      }
+
+      parseFunctionDeclaration() {
+        this.consume(); // 'function'
+        const idToken = this.consume();
+        const idNode = this.createNode('Identifier', [], idToken);
+        
+        this.match('(');
+        let params = [];
+        if (this.peek().value !== ')') {
+          while (this.peek().type !== 'EOF' && this.peek().value !== ')') {
+            if (this.peek().type === 'IDENT') {
+              params.push(this.createNode('Identifier', [], this.consume()));
+            } else if (this.peek().value === ',') {
+              this.consume();
+            } else break;
+          }
+        }
+        this.match(')');
+
+        const bodyNode = this.parseBlock();
+        return this.createNode('FunctionDeclaration', [
+          idNode,
+          this.createNode('FormalParameterList', params),
+          this.createNode('FunctionBody', [bodyNode])
+        ]);
+      }
+
+      parseStatement() {
+        const tok = this.peek();
+        if (tok.value === '{') return this.createNode('Statement', [this.parseBlock()]);
+        if (tok.value === 'var') return this.createNode('Statement', [this.parseVarStatement()]);
+        if (tok.value === 'if') return this.createNode('Statement', [this.parseIfStatement()]);
+        if (tok.value === 'while' || tok.value === 'for') return this.createNode('Statement', [this.parseIterationStatement()]);
+        if (tok.value === 'return') return this.createNode('Statement', [this.parseReturnStatement()]);
+        if (tok.value === ';') return this.createNode('Statement', [this.createNode('EmptyStatement', [], this.consume())]);
+
+        // Default: ExpressionStatement
+        const expr = this.parseExpression();
+        this.match(';');
+        return expr ? this.createNode('Statement', [this.createNode('ExpressionStatement', [expr])]) : null;
+      }
+
+      parseBlock() {
+        this.match('{');
+        const stmts = [];
+        while (this.peek().type !== 'EOF' && this.peek().value !== '}') {
+          const s = this.parseStatement();
+          if (s) stmts.push(s);
+          else this.consume();
+        }
+        this.match('}');
+        return this.createNode('Block', [this.createNode('StatementList', stmts)]);
+      }
+
+      parseVarStatement() {
+        this.consume(); // 'var'
+        const decls = [];
+        while (this.peek().type !== 'EOF' && this.peek().value !== ';') {
+          if (this.peek().type === 'IDENT') {
+            const nameNode = this.createNode('Identifier', [], this.consume());
+            let initNode = null;
+            if (this.peek().value === '=') {
+              this.consume();
+              initNode = this.createNode('Initializer', [this.parseAssignmentExpression()]);
+            }
+            decls.push(this.createNode('VariableDeclaration', initNode ? [nameNode, initNode] : [nameNode]));
+          } else if (this.peek().value === ',') {
+            this.consume();
+          } else break;
+        }
+        this.match(';');
+        return this.createNode('VariableStatement', [this.createNode('VariableDeclarationList', decls)]);
+      }
+
+      parseIfStatement() {
+        this.consume(); // 'if'
+        this.match('(');
+        const cond = this.parseExpression();
+        this.match(')');
+        const thenStmt = this.parseStatement();
+        let elseStmt = null;
+        if (this.peek().value === 'else') {
+          this.consume();
+          elseStmt = this.parseStatement();
+        }
+        const children = [cond, thenStmt];
+        if (elseStmt) children.push(elseStmt);
+        return this.createNode('IfStatement', children);
+      }
+
+      parseIterationStatement() {
+        const type = this.consume().value; // 'while' or 'for'
+        this.match('(');
+        const expr = this.parseExpression();
+        this.match(')');
+        const body = this.parseStatement();
+        return this.createNode('IterationStatement', [expr, body]);
+      }
+
+      parseReturnStatement() {
+        this.consume(); // 'return'
+        let expr = null;
+        if (this.peek().value !== ';') {
+          expr = this.parseExpression();
+        }
+        this.match(';');
+        return this.createNode('ReturnStatement', expr ? [expr] : []);
+      }
+
+      parseExpression() {
+        const expr = this.parseAssignmentExpression();
+        if (this.peek().value === ',') {
+          this.consume();
+          const right = this.parseExpression();
+          return this.createNode('Expression', [expr, right]);
+        }
+        return this.createNode('Expression', [expr]);
+      }
+
+      parseAssignmentExpression() {
+        const left = this.parseConditionalExpression();
+        if (['=', '+=', '-=', '*=', '/='].includes(this.peek().value)) {
+          const opToken = this.consume();
+          const opNode = this.createNode('AssignmentOperator', [], opToken);
+          const right = this.parseAssignmentExpression();
+          return this.createNode('AssignmentExpression', [left, opNode, right]);
+        }
+        return this.createNode('AssignmentExpression', [left]);
+      }
+
+      parseConditionalExpression() {
+        const cond = this.parseLogicalOR();
+        if (this.peek().value === '?') {
+          this.consume();
+          const thenExpr = this.parseAssignmentExpression();
+          this.match(':');
+          const elseExpr = this.parseAssignmentExpression();
+          return this.createNode('ConditionalExpression', [cond, thenExpr, elseExpr]);
+        }
+        return this.createNode('ConditionalExpression', [cond]);
+      }
+
+      parseLogicalOR() { return this.parseBinaryChain('LogicalORExpression', ['||'], () => this.parseLogicalAND()); }
+      parseLogicalAND() { return this.parseBinaryChain('LogicalANDExpression', ['&&'], () => this.parseEquality()); }
+      parseEquality() { return this.parseBinaryChain('EqualityExpression', ['==', '!='], () => this.parseRelational()); }
+      parseRelational() { return this.parseBinaryChain('RelationalExpression', ['<', '>', '<=', '>='], () => this.parseAdditive()); }
+
+      parseAdditive() { return this.parseBinaryChain('AdditiveExpression', ['+', '-'], () => this.parseMultiplicative()); }
+      parseMultiplicative() { return this.parseBinaryChain('MultiplicativeExpression', ['*', '/', '%'], () => this.parsePrimary()); }
+
+      parseBinaryChain(ruleName, ops, subParser) {
+        let left = subParser();
+        while (ops.includes(this.peek().value)) {
+          const opToken = this.consume();
+          const right = subParser();
+          left = this.createNode(ruleName, [left, this.createNode('Operator', [], opToken), right]);
+        }
+        return this.createNode(ruleName, [left]);
+      }
+
+      parsePrimary() {
+        const tok = this.peek();
+        if (tok.type === 'IDENT') {
+          return this.createNode('PrimaryExpression', [this.createNode('Identifier', [], this.consume())]);
+        }
+        if (tok.type === 'NUMBER') {
+          return this.createNode('PrimaryExpression', [this.createNode('Literal', [this.createNode('NumericLiteral', [], this.consume())])]);
+        }
+        if (tok.type === 'STRING') {
+          return this.createNode('PrimaryExpression', [this.createNode('Literal', [this.createNode('StringLiteral', [], this.consume())])]);
+        }
+        if (['true', 'false', 'null'].includes(tok.value)) {
+          return this.createNode('PrimaryExpression', [this.createNode('Literal', [this.createNode(tok.value === 'null' ? 'NullLiteral' : 'BooleanLiteral', [], this.consume())])]);
+        }
+        if (tok.value === '(') {
+          this.consume();
+          const inner = this.parseExpression();
+          this.match(')');
+          return this.createNode('PrimaryExpression', [inner]);
+        }
+        return this.createNode('PrimaryExpression', [], this.consume());
+      }
+    }
+
+    function parseAndInspectCode() {
+      const code = document.getElementById('codeInspectorInput').value;
+      const tokens = lexJS11(code).filter(t => t.type !== 'EOF');
+      parsedTokensList = tokens;
+
+      const parser = new JS11Parser(tokens);
+      parsedAstRoot = parser.parseProgram();
+
+      renderTokenBadges(tokens);
+      renderAstTree(parsedAstRoot);
+    }
+
+    function renderTokenBadges(tokens) {
+      const output = document.getElementById('inspectorTokensOutput');
+      document.getElementById('tokenCountBadge').textContent = `${tokens.length} Tokens`;
+      output.innerHTML = '';
+
+      tokens.forEach((tok, idx) => {
+        const badge = document.createElement('button');
+        badge.className = "px-2 py-1 text-xs font-mono rounded bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-border hover:border-blue-500 transition shadow-sm flex items-center gap-1.5";
+        
+        let colorClass = "text-slate-700 dark:text-slate-300";
+        if (tok.type === 'KEYWORD') colorClass = "text-purple-600 font-bold";
+        else if (tok.type === 'IDENT') colorClass = "text-blue-600 dark:text-blue-400 font-medium";
+        else if (tok.type === 'NUMBER') colorClass = "text-amber-600 font-mono";
+        else if (tok.type === 'STRING') colorClass = "text-emerald-600 font-mono";
+
+        badge.innerHTML = `<span class="${colorClass}">${escapeHtml(tok.value)}</span><span class="text-[9px] text-slate-400 opacity-60">#${idx}</span>`;
+        badge.onclick = () => inspectTokenDerivation(tok);
+        output.appendChild(badge);
+      });
+    }
+
+    function inspectTokenDerivation(targetToken) {
+      const path = [];
+      
+      function findPath(node) {
+        if (!node) return false;
+        path.push(node.rule);
+
+        if (node.token && node.token.start === targetToken.start) {
+          return true;
+        }
+
+        for (let child of node.children) {
+          if (findPath(child)) return true;
+        }
+
+        path.pop();
+        return false;
+      }
+
+      findPath(parsedAstRoot);
+
+      const pathBox = document.getElementById('derivationPathBox');
+      const pathContent = document.getElementById('derivationPathContent');
+      pathBox.classList.remove('hidden');
+      pathContent.innerHTML = '';
+
+      path.forEach((rule, idx) => {
+        if (idx > 0) {
+          const sep = document.createElement('span');
+          sep.className = "text-slate-400 text-[10px]";
+          sep.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+          pathContent.appendChild(sep);
+        }
+
+        const tag = document.createElement('span');
+        tag.className = "px-2 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-300 font-bold cursor-pointer hover:underline border border-blue-500/30";
+        tag.textContent = rule;
+        tag.onclick = () => jumpToRule(rule);
+        pathContent.appendChild(tag);
+      });
+
+      jumpToRule(path[path.length - 1] || 'Program');
+    }
+
+    function renderAstTree(rootNode) {
+      const output = document.getElementById('astTreeOutput');
+      output.innerHTML = '';
+
+      function buildHtml(node) {
+        const div = document.createElement('div');
+        div.className = "ast-tree-node my-1";
+
+        const header = document.createElement('div');
+        header.className = "cursor-pointer hover:text-blue-500 font-bold flex items-center gap-2";
+        header.innerHTML = `<i class="fa-solid fa-folder-tree text-[10px] text-blue-500"></i> ${node.rule}`;
+        header.onclick = (e) => {
+          e.stopPropagation();
+          jumpToRule(node.rule);
+        };
+        div.appendChild(header);
+
+        if (node.token) {
+          const leaf = document.createElement('div');
+          leaf.className = "text-[11px] text-pink-500 pl-4 font-normal";
+          leaf.textContent = `Token: "${node.token.value}" (${node.token.type})`;
+          div.appendChild(leaf);
+        }
+
+        node.children.forEach(child => {
+          div.appendChild(buildHtml(child));
+        });
+
+        return div;
+      }
+
+      output.appendChild(buildHtml(rootNode));
+    }
+
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      const htmlEl = document.documentElement;
+      const themeIcon = document.getElementById('themeIcon');
+      const themeLabel = document.getElementById('themeLabel');
+
+      if (isDarkMode) {
+        htmlEl.classList.add('dark');
+        themeIcon.className = "fa-solid fa-moon text-amber-400";
+        themeLabel.textContent = "Dark";
+      } else {
+        htmlEl.classList.remove('dark');
+        themeIcon.className = "fa-solid fa-sun text-amber-500";
+        themeLabel.textContent = "Day";
+      }
+
+      if (currentView === 'graph') drawGraph();
+    }
+
+    function switchMainView(view) {
+      currentView = view;
+      ['cards', 'playground', 'graph'].forEach(v => {
+        document.getElementById(`${v}View`).classList.add('hidden');
+      });
+      document.getElementById(`${view}View`).classList.remove('hidden');
+
+      if (view === 'graph') {
+        resizeCanvas();
+        rebuildGraphLayout(activeGraphNodeId);
+      }
+    }
+
+    function jumpToRule(ruleId, addToHistory = true) {
+      if (!ruleMap.has(ruleId)) return;
+
+      if (addToHistory) {
+        if (historyPointer < historyStack.length - 1) {
+          historyStack = historyStack.slice(0, historyPointer + 1);
+        }
+        historyStack.push(ruleId);
+        historyPointer = historyStack.length - 1;
+      }
+
+      updateBreadcrumbUI();
+      activeGraphNodeId = ruleId;
+
+      if (currentView === 'cards') {
+        const card = document.getElementById(`card-${ruleId}`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.remove('rule-highlight');
+          void card.offsetWidth;
+          card.classList.add('rule-highlight');
+        }
+      } else if (currentView === 'graph') {
+        rebuildGraphLayout(ruleId);
+      }
+    }
+
+    function navigateHistory(dir) {
+      const p = historyPointer + dir;
+      if (p >= 0 && p < historyStack.length) {
+        historyPointer = p;
+        jumpToRule(historyStack[p], false);
+      }
+    }
+
+    function updateBreadcrumbUI() {
+      const container = document.getElementById('breadcrumbsList');
+      container.innerHTML = '';
+      historyStack.forEach((ruleId, idx) => {
+        if (idx > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'text-slate-400 text-[10px]';
+          sep.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+          container.appendChild(sep);
+        }
+        const crumb = document.createElement('button');
+        crumb.className = `px-2 py-0.5 rounded ${idx === historyPointer ? 'bg-blue-500/20 text-blue-600 font-bold' : 'hover:bg-slate-200 dark:hover:bg-dark-700'}`;
+        crumb.textContent = ruleId;
+        crumb.onclick = () => { historyPointer = idx; jumpToRule(ruleId, false); };
+        container.appendChild(crumb);
+      });
+    }
+
+    function formatEBNF(defString) {
+      let res = defString.replace(/'([^']+)'/g, '<span class="t-token kw-token">\'$1\'</span>');
+      res = res.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (m) => {
+        return ruleSet.has(m) ? `<span class="nt-token" onclick="jumpToRule('${m}')">${m}</span>` : m;
+      });
+      return res;
+    }
+
+    function renderSidebarList() {
+      const container = document.getElementById('sidebarRuleList');
+      container.innerHTML = '';
+      const query = document.getElementById('searchInput').value.toLowerCase();
+
+      GRAMMAR_DATA.forEach(rule => {
+        if (activeFilterCategory !== 'all' && rule.category !== activeFilterCategory) return;
+        if (query && !rule.id.toLowerCase().includes(query)) return;
+
+        const item = document.createElement('div');
+        item.className = 'p-2 rounded cursor-pointer hover:bg-slate-100 dark:hover:bg-dark-700 text-xs flex justify-between';
+        item.onclick = () => jumpToRule(rule.id);
+        item.innerHTML = `<span class="font-mono font-medium">${rule.id}</span><i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>`;
+        container.appendChild(item);
+      });
+    }
+
+    function renderCardsView() {
+      const container = document.getElementById('ruleCardsContainer');
+      container.innerHTML = '';
+
+      GRAMMAR_DATA.forEach(rule => {
+        const card = document.createElement('div');
+        card.id = `card-${rule.id}`;
+        card.className = 'bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-border rounded-xl p-5 shadow-sm';
+        card.innerHTML = `
+          <div class="flex justify-between pb-2 border-b border-slate-200 dark:border-dark-border mb-3">
+            <h3 class="font-mono text-base font-bold text-blue-600 dark:text-blue-400">${rule.id}</h3>
+            <span class="text-xs text-slate-400">${rule.category}</span>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">${rule.summary}</p>
+          <div class="bg-slate-50 dark:bg-dark-900 p-3 rounded font-mono text-xs">${formatEBNF(rule.def)}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function filterRules() { renderSidebarList(); }
+    function setCategoryFilter(cat) {
+      activeFilterCategory = cat;
+      renderSidebarList();
+    }
+
+    function initGraphCanvas() {
+      canvas = document.getElementById('grammarCanvas');
+      ctx = canvas.getContext('2d');
+
+      canvas.addEventListener('mousedown', e => {
+        isDragging = true;
+        dragStart = { x: e.clientX - camera.x, y: e.clientY - camera.y };
+      });
+      window.addEventListener('mousemove', e => {
+        if (isDragging) {
+          camera.x = e.clientX - dragStart.x;
+          camera.y = e.clientY - dragStart.y;
+          drawGraph();
+        }
+      });
+      window.addEventListener('mouseup', () => isDragging = false);
+
+      canvas.addEventListener('click', e => {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX - rect.left - camera.x) / camera.zoom;
+        const clickY = (e.clientY - rect.top - camera.y) / camera.zoom;
+
+        for (let node of graphNodes) {
+          if (Math.abs(clickX - node.x) < node.width/2 && Math.abs(clickY - node.y) < node.height/2) {
+            if (node.isNonTerminal) jumpToRule(node.id);
+            break;
+          }
+        }
+      });
+    }
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+
+    function zoomGraph(factor) {
+      camera.zoom = Math.max(0.4, Math.min(2.0, camera.zoom * factor));
+      drawGraph();
+    }
+
+    function resetGraphView() {
+      camera = { x: canvas.width / 2, y: canvas.height / 2, zoom: 1 };
+      drawGraph();
+    }
+
+    function rebuildGraphLayout(centerRuleId) {
+      document.getElementById('graphNodeFocusText').textContent = `Focus: ${centerRuleId}`;
+      const centerRule = ruleMap.get(centerRuleId);
+      if (!centerRule) return;
+
+      graphNodes = [];
+      graphEdges = [];
+
+      const rootNode = { id: centerRule.id, label: centerRule.id, x: 0, y: 0, width: 140, height: 40, type: 'root', isNonTerminal: true };
+      graphNodes.push(rootNode);
+
+      const tokens = Array.from(new Set(centerRule.def.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []));
+      let idx = 0;
+      const radius = 200;
+
+      tokens.forEach(tok => {
+        if (ruleSet.has(tok) && tok !== centerRuleId) {
+          const angle = (idx / tokens.length) * Math.PI * 2;
+          const node = { id: tok, label: tok, x: Math.cos(angle)*radius, y: Math.sin(angle)*radius, width: 120, height: 36, type: 'nt', isNonTerminal: true };
+          graphNodes.push(node);
+          graphEdges.push({ from: rootNode, to: node });
+          idx++;
+        }
+      });
+
+      camera.x = canvas.width / 2;
+      camera.y = canvas.height / 2;
+      camera.zoom = 1;
+      drawGraph();
+    }
+
+    function drawGraph() {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(camera.x, camera.y);
+      ctx.scale(camera.zoom, camera.zoom);
+
+      graphEdges.forEach(e => {
+        ctx.beginPath();
+        ctx.moveTo(e.from.x, e.from.y);
+        ctx.lineTo(e.to.x, e.to.y);
+        ctx.strokeStyle = isDarkMode ? '#2a3241' : '#cbd5e1';
+        ctx.stroke();
+      });
+
+      graphNodes.forEach(node => {
+        ctx.beginPath();
+        ctx.roundRect(node.x - node.width/2, node.y - node.height/2, node.width, node.height, 8);
+        ctx.fillStyle = node.type === 'root' ? '#3b82f6' : '#0284c7';
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '12px "Fira Code"';
+        ctx.fillText(node.label, node.x, node.y);
+      });
+
+      ctx.restore();
+    }
+
+    function loadSampleCode(num) {
+      const area = document.getElementById('codeInspectorInput');
+      if (num === 1) area.value = `var count = 10;\nif (count > 5) {\n  var msg = "OK";\n}`;
+      if (num === 2) area.value = `function add(a, b) {\n  return a + b;\n}`;
+      if (num === 3) area.value = `var res = 5 + 10 * 20;`;
+      parseAndInspectCode();
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>

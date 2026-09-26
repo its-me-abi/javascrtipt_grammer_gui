@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JavaScript 1.1 Interactive Grammar Browser</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Fira Code', 'monospace'],
+          },
+          colors: {
+            dark: {
+              900: '#0a0c10',
+              800: '#12161f',
+              700: '#1a202c',
+              600: '#2d3748',
+              border: '#2a3241'
+            },
+            accent: {
+              blue: '#3b82f6',
+              cyan: '#06b6d4',
+              purple: '#a855f7',
+              pink: '#ec4899',
+              green: '#10b981',
+              amber: '#f59e0b',
+              red: '#ef4444'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #0a0c10;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+    
+    pre, code, .font-mono {
+      font-family: 'Fira Code', monospace;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #12161f;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2a3241;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b82f6;
+    }
+
+    /* Target Rule Pulse Animation */
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); border-color: #3b82f6; }
+      50% { box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.4); border-color: #60a5fa; }
+      100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); border-color: #2a3241; }
+    }
+
+    .rule-highlight {
+      animation: pulseGlow 2.5s ease-out;
+      border-color: #3b82f6 !important;
+      background-color: rgba(59, 130, 246, 0.08) !important;
+    }
+
+    /* Non-terminal & Terminal styling */
+    .nt-token {
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.12);
+      border: 1px solid rgba(96, 165, 250, 0.25);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-block;
+    }
+    .nt-token:hover {
+      background: rgba(96, 165, 250, 0.3);
+      border-color: #60a5fa;
+      color: #93c5fd;
+      transform: translateY(-1px);
+    }
+
+    .t-token {
+      color: #f472b6;
+      background: rgba(244, 114, 182, 0.1);
+      border: 1px solid rgba(244, 114, 182, 0.2);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .kw-token {
+      color: #c084fc;
+      font-weight: 700;
+    }
+
+    .op-token {
+      color: #34d399;
+      font-weight: bold;
+    }
+
+    /* Interactive canvas overlay controls */
+    .canvas-ctrl-btn {
+      background: #1a202c;
+      border: 1px solid #2a3241;
+      color: #94a3b8;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .canvas-ctrl-btn:hover {
+      background: #2b3548;
+      color: #f8fafc;
+      border-color: #3b82f6;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col bg-dark-900 text-slate-200 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Top Header Navigation -->
+  <header class="h-14 bg-dark-800 border-b border-dark-border px-4 flex items-center justify-between shrink-0 z-30">
+    <div class="flex items-center space-x-3">
+      <div class="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-black shadow-lg shadow-blue-500/20">
+        <i class="fa-solid fa-code text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base tracking-wide text-white flex items-center gap-2">
+          JavaScript 1.1 <span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">Spec EBNF</span>
+        </h1>
+        <p class="text-xs text-slate-400">Netscape Navigator 3.0 / ECMA-262 1st Edition Grammar Explorer</p>
+      </div>
+    </div>
+
+    <!-- View Mode Switcher Controls -->
+    <div class="flex items-center space-x-2 bg-dark-900 p-1 rounded-lg border border-dark-border">
+      <button id="viewBtnCards" onclick="switchMainView('cards')" class="px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all bg-blue-600 text-white shadow">
+        <i class="fa-solid fa-layer-group"></i> Rule Cards
+      </button>
+      <button id="viewBtnGraph" onclick="switchMainView('graph')" class="px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-diagram-project"></i> Visual Graph
+      </button>
+      <button id="viewBtnPlayground" onclick="switchMainView('playground')" class="px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-terminal"></i> Parser Visualizer
+      </button>
+    </div>
+
+    <!-- Quick Stats & Actions -->
+    <div class="flex items-center space-x-3 text-xs text-slate-400">
+      <span class="hidden md:inline-flex items-center gap-1 bg-dark-700 px-2.5 py-1 rounded-md border border-dark-border">
+        <i class="fa-solid fa-hashtag text-blue-400"></i> <span id="statRuleCount">52</span> Productions
+      </span>
+      <button onclick="openInfoModal()" class="text-slate-400 hover:text-blue-400 transition p-1.5 rounded-lg hover:bg-dark-700">
+        <i class="fa-solid fa-circle-info text-base"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Navigation Breadcrumb Bar -->
+  <div class="h-9 bg-dark-900 border-b border-dark-border/60 px-4 flex items-center justify-between text-xs shrink-0 z-20">
+    <div class="flex items-center space-x-2 overflow-x-auto py-1 scrollbar-none" id="breadcrumbContainer">
+      <button id="btnNavBack" onclick="navigateHistory(-1)" disabled class="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:hover:text-slate-500 p-1">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <button id="btnNavForward" onclick="navigateHistory(1)" disabled class="text-slate-500 hover:text-slate-200 disabled:opacity-40 disabled:hover:text-slate-500 p-1">
+        <i class="fa-solid fa-arrow-right"></i>
+      </button>
+      <span class="text-dark-border">|</span>
+      <div id="breadcrumbsList" class="flex items-center space-x-1 text-slate-400">
+        <!-- Breadcrumbs injected dynamically -->
+      </div>
+    </div>
+
+    <div class="hidden sm:flex items-center gap-2 text-slate-500 text-[11px]">
+      <kbd class="px-1.5 py-0.5 bg-dark-800 border border-dark-border rounded text-slate-400">Click</kbd> symbol to navigate
+    </div>
+  </div>
+
+  <!-- Main Workspace -->
+  <div class="flex flex-1 overflow-hidden relative">
+
+    <!-- Sidebar Search & Categories -->
+    <aside class="w-72 bg-dark-800 border-r border-dark-border flex flex-col shrink-0">
+      <!-- Search Box -->
+      <div class="p-3 border-b border-dark-border">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+          <input type="text" id="searchInput" oninput="filterRules()" placeholder="Filter grammar rules..."
+            class="w-full bg-dark-900 border border-dark-border rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition">
+          <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-2 text-slate-500 hover:text-slate-300">
+            <i class="fa-solid fa-xmark text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Categories Filter Tabs -->
+      <div class="p-2 border-b border-dark-border/60 flex items-center gap-1 overflow-x-auto text-[11px]">
+        <button onclick="setCategoryFilter('all')" id="cat-all" class="cat-btn bg-blue-600 text-white px-2.5 py-1 rounded-md font-medium">All</button>
+        <button onclick="setCategoryFilter('Statement')" id="cat-Statement" class="cat-btn text-slate-400 hover:bg-dark-700 px-2 py-1 rounded-md">Statements</button>
+        <button onclick="setCategoryFilter('Expression')" id="cat-Expression" class="cat-btn text-slate-400 hover:bg-dark-700 px-2 py-1 rounded-md">Expressions</button>
+        <button onclick="setCategoryFilter('Literal')" id="cat-Literal" class="cat-btn text-slate-400 hover:bg-dark-700 px-2 py-1 rounded-md">Literals</button>
+      </div>
+
+      <!-- Rule Nav List -->
+      <div class="flex-1 overflow-y-auto p-2 space-y-0.5" id="sidebarRuleList">
+        <!-- Sidebar items rendered dynamically -->
+      </div>
+    </aside>
+
+    <!-- Main Viewport Area -->
+    <main class="flex-1 bg-dark-900 relative overflow-hidden flex flex-col">
+
+      <!-- View 1: Rule Cards View -->
+      <div id="cardsView" class="flex-1 overflow-y-auto p-6 space-y-6">
+        <div class="max-w-5xl mx-auto space-y-6" id="ruleCardsContainer">
+          <!-- Dynamic Rule Cards -->
+        </div>
+      </div>
+
+      <!-- View 2: Interactive Grammar Canvas Graph View -->
+      <div id="graphView" class="hidden absolute inset-0 flex flex-col bg-dark-900">
+        <!-- Graph controls toolbar overlay -->
+        <div class="absolute top-4 left-4 z-10 flex items-center gap-2 bg-dark-800/90 backdrop-blur-md p-1.5 rounded-lg border border-dark-border shadow-xl">
+          <button class="canvas-ctrl-btn" onclick="zoomGraph(1.2)" title="Zoom In"><i class="fa-solid fa-plus text-xs"></i></button>
+          <button class="canvas-ctrl-btn" onclick="zoomGraph(0.8)" title="Zoom Out"><i class="fa-solid fa-minus text-xs"></i></button>
+          <button class="canvas-ctrl-btn" onclick="resetGraphView()" title="Fit View"><i class="fa-solid fa-expand text-xs"></i></button>
+          <div class="h-4 w-px bg-dark-border mx-1"></div>
+          <span class="text-xs text-slate-400 px-2 font-mono" id="graphNodeFocusText">Focus: Program</span>
+        </div>
+
+        <div class="absolute bottom-4 right-4 z-10 bg-dark-800/90 backdrop-blur-md p-2.5 rounded-lg border border-dark-border text-[11px] text-slate-400 space-y-1 shadow-lg">
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500 inline-block"></span> Selected / Active Node</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-cyan-600 inline-block"></span> Non-Terminal Dependency</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-pink-500 inline-block"></span> Terminal Production</div>
+          <div class="text-[10px] text-slate-500 pt-1 border-t border-dark-border">Drag to Pan | Scroll to Zoom | Click to Jump</div>
+        </div>
+
+        <!-- Canvas Element -->
+        <canvas id="grammarCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+      </div>
+
+      <!-- View 3: Syntax Code Parser & Visualizer -->
+      <div id="playgroundView" class="hidden flex-1 overflow-y-auto p-6">
+        <div class="max-w-4xl mx-auto space-y-6">
+          <div class="bg-dark-800 rounded-xl border border-dark-border p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-vial-circle-check text-blue-400"></i> JS 1.1 Code Token & Rule Inspector
+              </h2>
+              <span class="text-xs text-slate-400">Type valid JS 1.1 code to parse tokens</span>
+            </div>
+
+            <!-- Code Input Box -->
+            <div class="relative">
+              <textarea id="codeInspectorInput" rows="4" 
+                class="w-full bg-dark-900 border border-dark-border rounded-lg p-3 font-mono text-sm text-blue-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                placeholder="Type JS 1.1 code here... e.g., var x = 10; function add(a, b) { return a + b; }">var count = 42;
+if (count > 10) {
+  var msg = "JavaScript 1.1 Grammars";
+}</textarea>
+            </div>
+
+            <div class="flex items-center justify-between mt-3">
+              <div class="flex gap-2">
+                <button onclick="loadSampleCode(1)" class="text-xs bg-dark-700 hover:bg-dark-600 text-slate-300 px-2.5 py-1 rounded border border-dark-border">Sample: If/Var</button>
+                <button onclick="loadSampleCode(2)" class="text-xs bg-dark-700 hover:bg-dark-600 text-slate-300 px-2.5 py-1 rounded border border-dark-border">Sample: Function</button>
+                <button onclick="loadSampleCode(3)" class="text-xs bg-dark-700 hover:bg-dark-600 text-slate-300 px-2.5 py-1 rounded border border-dark-border">Sample: Expressions</button>
+              </div>
+              <button onclick="inspectCodeSyntax()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow-md transition flex items-center gap-2">
+                <i class="fa-solid fa-play"></i> Inspect Grammar Matching
+              </button>
+            </div>
+          </div>
+
+          <!-- Token & Rule Breakdown Output -->
+          <div class="bg-dark-800 rounded-xl border border-dark-border p-5 shadow-xl space-y-4">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Identified Tokens & Grammar Links</h3>
+            <div id="inspectorTokensOutput" class="flex flex-wrap gap-2 min-h-[60px] p-4 bg-dark-900 rounded-lg border border-dark-border/80">
+              <!-- Dynamically populated tokens -->
+            </div>
+          </div>
+
+          <!-- Grammar Tree Trace Explanation -->
+          <div class="bg-dark-800 rounded-xl border border-dark-border p-5 shadow-xl space-y-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Inferred Grammar Rules Invoked</h3>
+            <div id="inspectorRulesTrace" class="space-y-2 font-mono text-xs">
+              <!-- Dynamically generated list -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Specification Info Modal -->
+  <div id="infoModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-dark-800 border border-dark-border rounded-xl max-w-lg w-full p-6 shadow-2xl relative space-y-4">
+      <button onclick="closeInfoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <div class="flex items-center gap-3 border-b border-dark-border pb-3">
+        <div class="bg-blue-500/20 text-blue-400 p-2 rounded-lg">
+          <i class="fa-solid fa-book-bookmark text-xl"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">JavaScript 1.1 Specification</h3>
+          <p class="text-xs text-slate-400">Netscape Navigator 3.0 (1996) / ECMA-262 Edition 1</p>
+        </div>
+      </div>
+      <div class="text-xs text-slate-300 space-y-2.5 leading-relaxed">
+        <p>JavaScript 1.1 was introduced with Netscape Navigator 3.0 in 1996, laying the foundation for the first ECMA-262 standard (ECMAScript 1).</p>
+        <div class="bg-dark-900 p-3 rounded-lg border border-dark-border space-y-1">
+          <p class="font-semibold text-blue-400">Key Features of JS 1.1 Grammar:</p>
+          <ul class="list-disc list-inside space-y-1 text-slate-400">
+            <li>Array and Object literals (`[...]` and `{...}`)</li>
+            <li>Operators: `delete`, `typeof`, `void`, bitwise shift operators</li>
+            <li>Constructor functions and `new` operator syntax</li>
+            <li>`for...in` iteration loops</li>
+          </ul>
+        </div>
+        <p class="text-slate-400">Note: Early JS 1.1 lacked features added in later specifications like `let`/`const`, arrow functions, `try/catch`, async/await, or class declarations.</p>
+      </div>
+      <div class="pt-2 flex justify-end">
+        <button onclick="closeInfoModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Comprehensive JavaScript 1.1 EBNF Production Database
+    const GRAMMAR_DATA = [
+      {
+        id: "Program",
+        category: "Declaration",
+        summary: "Root entry point for a JavaScript 1.1 script.",
+        def: "SourceElements?"
+      },
+      {
+        id: "SourceElements",
+        category: "Declaration",
+        summary: "A sequence of one or more source elements (statements or functions).",
+        def: "SourceElement | SourceElements SourceElement"
+      },
+      {
+        id: "SourceElement",
+        category: "Declaration",
+        summary: "Either a top-level statement or function declaration.",
+        def: "Statement | FunctionDeclaration"
+      },
+      {
+        id: "Statement",
+        category: "Statement",
+        summary: "Core control structures and execution statements in JS 1.1.",
+        def: "Block | VariableStatement | EmptyStatement | ExpressionStatement | IfStatement | IterationStatement | ContinueStatement | BreakStatement | ReturnStatement | WithStatement"
+      },
+      {
+        id: "Block",
+        category: "Statement",
+        summary: "Statements enclosed within curly braces.",
+        def: "'{' StatementList? '}'"
+      },
+      {
+        id: "StatementList",
+        category: "Statement",
+        summary: "One or more statements executed sequentially.",
+        def: "Statement | StatementList Statement"
+      },
+      {
+        id: "VariableStatement",
+        category: "Statement",
+        summary: "Variable declaration using 'var' keyword.",
+        def: "'var' VariableDeclarationList ';'"
+      },
+      {
+        id: "VariableDeclarationList",
+        category: "Statement",
+        summary: "Comma-separated list of variable declarations.",
+        def: "VariableDeclaration | VariableDeclarationList ',' VariableDeclaration"
+      },
+      {
+        id: "VariableDeclaration",
+        category: "Statement",
+        summary: "Identifier with optional initializer assignment.",
+        def: "Identifier Initializer?"
+      },
+      {
+        id: "Initializer",
+        category: "Statement",
+        summary: "Default value assignment for a variable.",
+        def: "'=' AssignmentExpression"
+      },
+      {
+        id: "EmptyStatement",
+        category: "Statement",
+        summary: "A standalone semicolon indicating no action.",
+        def: "';'"
+      },
+      {
+        id: "ExpressionStatement",
+        category: "Statement",
+        summary: "An expression evaluated as a statement.",
+        def: "Expression ';'"
+      },
+      {
+        id: "IfStatement",
+        category: "Statement",
+        summary: "Conditional branch statement.",
+        def: "'if' '(' Expression ')' Statement ('else' Statement)?"
+      },
+      {
+        id: "IterationStatement",
+        category: "Statement",
+        summary: "Loop constructs: while, for, and for..in.",
+        def: "'while' '(' Expression ')' Statement\n| 'for' '(' Expression? ';' Expression? ';' Expression? ')' Statement\n| 'for' '(' 'var' VariableDeclarationList ';' Expression? ';' Expression? ')' Statement\n| 'for' '(' LeftHandSideExpression 'in' Expression ')' Statement\n| 'for' '(' 'var' VariableDeclaration 'in' Expression ')' Statement"
+      },
+      {
+        id: "ContinueStatement",
+        category: "Statement",
+        summary: "Skips to the next iteration of the loop.",
+        def: "'continue' ';'"
+      },
+      {
+        id: "BreakStatement",
+        category: "Statement",
+        summary: "Exits the current loop statement.",
+        def: "'break' ';'"
+      },
+      {
+        id: "ReturnStatement",
+        category: "Statement",
+        summary: "Returns a value from a function execution.",
+        def: "'return' Expression? ';'"
+      },
+      {
+        id: "WithStatement",
+        category: "Statement",
+        summary: "Extends scope chain for a statement block.",
+        def: "'with' '(' Expression ')' Statement"
+      },
+      {
+        id: "FunctionDeclaration",
+        category: "Declaration",
+        summary: "Defines a named function with parameters and body.",
+        def: "'function' Identifier '(' FormalParameterList? ')' '{' FunctionBody '}'"
+      },
+      {
+        id: "FormalParameterList",
+        category: "Declaration",
+        summary: "Comma-separated list of parameter identifiers.",
+        def: "Identifier | FormalParameterList ',' Identifier"
+      },
+      {
+        id: "FunctionBody",
+        category: "Declaration",
+        summary: "Body of a function composed of source elements.",
+        def: "SourceElements?"
+      },
+      {
+        id: "Expression",
+        category: "Expression",
+        summary: "Comma-separated list of assignment expressions.",
+        def: "AssignmentExpression | Expression ',' AssignmentExpression"
+      },
+      {
+        id: "AssignmentExpression",
+        category: "Expression",
+        summary: "Conditional expression or assignment to LHS target.",
+        def: "ConditionalExpression | LeftHandSideExpression AssignmentOperator AssignmentExpression"
+      },
+      {
+        id: "AssignmentOperator",
+        category: "Expression",
+        summary: "Assignment operators in JS 1.1.",
+        def: "'=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='"
+      },
+      {
+        id: "ConditionalExpression",
+        category: "Expression",
+        summary: "Ternary operator expression (condition ? trueVal : falseVal).",
+        def: "LogicalORExpression | LogicalORExpression '?' AssignmentExpression ':' AssignmentExpression"
+      },
+      {
+        id: "LogicalORExpression",
+        category: "Expression",
+        summary: "Logical OR (||) expression.",
+        def: "LogicalANDExpression | LogicalORExpression '||' LogicalANDExpression"
+      },
+      {
+        id: "LogicalANDExpression",
+        category: "Expression",
+        summary: "Logical AND (&&) expression.",
+        def: "BitwiseORExpression | LogicalANDExpression '&&' BitwiseORExpression"
+      },
+      {
+        id: "BitwiseORExpression",
+        category: "Expression",
+        summary: "Bitwise OR (|) expression.",
+        def: "BitwiseXORExpression | BitwiseORExpression '|' BitwiseXORExpression"
+      },
+      {
+        id: "BitwiseXORExpression",
+        category: "Expression",
+        summary: "Bitwise XOR (^) expression.",
+        def: "BitwiseANDExpression | BitwiseXORExpression '^' BitwiseANDExpression"
+      },
+      {
+        id: "BitwiseANDExpression",
+        category: "Expression",
+        summary: "Bitwise AND (&) expression.",
+        def: "EqualityExpression | BitwiseANDExpression '&' EqualityExpression"
+      },
+      {
+        id: "EqualityExpression",
+        category: "Expression",
+        summary: "Equality check (==, !=). Note: JS 1.1 did not have ===.",
+        def: "RelationalExpression | EqualityExpression '==' RelationalExpression | EqualityExpression '!=' RelationalExpression"
+      },
+      {
+        id: "RelationalExpression",
+        category: "Expression",
+        summary: "Relational comparisons (<, >, <=, >=).",
+        def: "ShiftExpression | RelationalExpression '<' ShiftExpression | RelationalExpression '>' ShiftExpression | RelationalExpression '<=' ShiftExpression | RelationalExpression '>=' ShiftExpression"
+      },
+      {
+        id: "ShiftExpression",
+        category: "Expression",
+        summary: "Bitwise binary shift operations (<<, >>, >>>).",
+        def: "AdditiveExpression | ShiftExpression '<<' AdditiveExpression | ShiftExpression '>>' AdditiveExpression | ShiftExpression '>>>' AdditiveExpression"
+      },
+      {
+        id: "AdditiveExpression",
+        category: "Expression",
+        summary: "Addition (+) and Subtraction (-) operators.",
+        def: "MultiplicativeExpression | AdditiveExpression '+' MultiplicativeExpression | AdditiveExpression '-' MultiplicativeExpression"
+      },
+      {
+        id: "MultiplicativeExpression",
+        category: "Expression",
+        summary: "Multiplication (*), Division (/), and Modulo (%) operators.",
+        def: "UnaryExpression | MultiplicativeExpression '*' UnaryExpression | MultiplicativeExpression '/' UnaryExpression | MultiplicativeExpression '%' UnaryExpression"
+      },
+      {
+        id: "UnaryExpression",
+        category: "Expression",
+        summary: "Unary operations (delete, void, typeof, ++, --, +, -, ~, !).",
+        def: "PostfixExpression | 'delete' UnaryExpression | 'void' UnaryExpression | 'typeof' UnaryExpression | '++' UnaryExpression | '--' UnaryExpression | '+' UnaryExpression | '-' UnaryExpression | '~' UnaryExpression | '!' UnaryExpression"
+      },
+      {
+        id: "PostfixExpression",
+        category: "Expression",
+        summary: "Postfix increment (++) and decrement (--).",
+        def: "LeftHandSideExpression | LeftHandSideExpression '++' | LeftHandSideExpression '--'"
+      },
+      {
+        id: "LeftHandSideExpression",
+        category: "Expression",
+        summary: "Valid left-hand side targets for assignment or calls.",
+        def: "NewExpression | CallExpression"
+      },
+      {
+        id: "NewExpression",
+        category: "Expression",
+        summary: "Object instantiation using 'new'.",
+        def: "MemberExpression | 'new' NewExpression"
+      },
+      {
+        id: "CallExpression",
+        category: "Expression",
+        summary: "Function execution call or dynamic property access.",
+        def: "MemberExpression Arguments | CallExpression Arguments | CallExpression '[' Expression ']' | CallExpression '.' Identifier"
+      },
+      {
+        id: "MemberExpression",
+        category: "Expression",
+        summary: "Primary expression or property access chain.",
+        def: "PrimaryExpression | MemberExpression '[' Expression ']' | MemberExpression '.' Identifier | 'new' MemberExpression Arguments"
+      },
+      {
+        id: "Arguments",
+        category: "Expression",
+        summary: "Parenthesized list of function call arguments.",
+        def: "'(' ArgumentList? ')'"
+      },
+      {
+        id: "ArgumentList",
+        category: "Expression",
+        summary: "Comma-separated list of expressions passed into call.",
+        def: "AssignmentExpression | ArgumentList ',' AssignmentExpression"
+      },
+      {
+        id: "PrimaryExpression",
+        category: "Expression",
+        summary: "Primitive values, identifiers, literals, or parenthesized expressions.",
+        def: "'this' | Identifier | Literal | ArrayLiteral | ObjectLiteral | '(' Expression ')'"
+      },
+      {
+        id: "ArrayLiteral",
+        category: "Literal",
+        summary: "JS 1.1 array initializer syntax: [item1, item2].",
+        def: "'[' ElementList? ']'"
+      },
+      {
+        id: "ElementList",
+        category: "Literal",
+        summary: "Elements inside an array literal.",
+        def: "AssignmentExpression | ElementList ',' AssignmentExpression"
+      },
+      {
+        id: "ObjectLiteral",
+        category: "Literal",
+        summary: "JS 1.1 object initializer syntax: { prop: val }.",
+        def: "'{' PropertyNameAndValueList? '}'"
+      },
+      {
+        id: "PropertyNameAndValueList",
+        category: "Literal",
+        summary: "Key-value pair list inside object literal.",
+        def: "PropertyName ':' AssignmentExpression | PropertyNameAndValueList ',' PropertyName ':' AssignmentExpression"
+      },
+      {
+        id: "PropertyName",
+        category: "Literal",
+        summary: "Property key name (Identifier, String, or Number).",
+        def: "Identifier | StringLiteral | NumericLiteral"
+      },
+      {
+        id: "Literal",
+        category: "Literal",
+        summary: "Primitive literals supported in JS 1.1.",
+        def: "NullLiteral | BooleanLiteral | NumericLiteral | StringLiteral"
+      },
+      {
+        id: "NullLiteral",
+        category: "Literal",
+        summary: "The literal token 'null'.",
+        def: "'null'"
+      },
+      {
+        id: "BooleanLiteral",
+        category: "Literal",
+        summary: "Boolean values: 'true' or 'false'.",
+        def: "'true' | 'false'"
+      }
+    ];
+
+    // Global App State
+    const ruleSet = new Set(GRAMMAR_DATA.map(g => g.id));
+    const ruleMap = new Map(GRAMMAR_DATA.map(g => [g.id, g]));
+
+    let currentView = 'cards'; // 'cards' | 'graph' | 'playground'
+    let historyStack = [];
+    let historyPointer = -1;
+    let activeFilterCategory = 'all';
+
+    // Canvas Graph Engine State
+    let canvas, ctx;
+    let graphNodes = [];
+    let graphEdges = [];
+    let activeGraphNodeId = 'Program';
+    let camera = { x: 0, y: 0, zoom: 1 };
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('statRuleCount').textContent = GRAMMAR_DATA.length;
+      
+      renderSidebarList();
+      renderCardsView();
+      initGraphCanvas();
+      
+      // Default navigation start
+      jumpToRule('Program', false);
+
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        if (currentView === 'graph') {
+          resizeCanvas();
+          drawGraph();
+        }
+      });
+    });
+
+    // View Switcher
+    function switchMainView(view) {
+      currentView = view;
+      
+      const cardsView = document.getElementById('cardsView');
+      const graphView = document.getElementById('graphView');
+      const playgroundView = document.getElementById('playgroundView');
+
+      const btnCards = document.getElementById('viewBtnCards');
+      const btnGraph = document.getElementById('viewBtnGraph');
+      const btnPlayground = document.getElementById('viewBtnPlayground');
+
+      [btnCards, btnGraph, btnPlayground].forEach(btn => {
+        btn.className = "px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200";
+      });
+
+      cardsView.classList.add('hidden');
+      graphView.classList.add('hidden');
+      playgroundView.classList.add('hidden');
+
+      if (view === 'cards') {
+        cardsView.classList.remove('hidden');
+        btnCards.className = "px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all bg-blue-600 text-white shadow";
+      } else if (view === 'graph') {
+        graphView.classList.remove('hidden');
+        btnGraph.className = "px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all bg-blue-600 text-white shadow";
+        resizeCanvas();
+        rebuildGraphLayout(activeGraphNodeId);
+      } else if (view === 'playground') {
+        playgroundView.classList.remove('hidden');
+        btnPlayground.className = "px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-2 transition-all bg-blue-600 text-white shadow";
+        inspectCodeSyntax();
+      }
+    }
+
+    function jumpToRule(ruleId, addToHistory = true) {
+      if (!ruleMap.has(ruleId)) return;
+
+      if (addToHistory) {
+        // Truncate forward history if navigating new branch
+        if (historyPointer < historyStack.length - 1) {
+          historyStack = historyStack.slice(0, historyPointer + 1);
+        }
+        historyStack.push(ruleId);
+        historyPointer = historyStack.length - 1;
+      }
+
+      updateBreadcrumbUI();
+
+      // Highlight in sidebar
+      document.querySelectorAll('.sidebar-rule-item').forEach(el => {
+        el.classList.remove('bg-blue-600/20', 'text-blue-400', 'border-blue-500/40');
+      });
+      const sideEl = document.getElementById(`side-rule-${ruleId}`);
+      if (sideEl) {
+        sideEl.classList.add('bg-blue-600/20', 'text-blue-400', 'border-blue-500/40');
+        sideEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+
+      activeGraphNodeId = ruleId;
+
+      if (currentView === 'cards') {
+        const card = document.getElementById(`card-${ruleId}`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.remove('rule-highlight');
+          // Trigger reflow for animation restart
+          void card.offsetWidth;
+          card.classList.add('rule-highlight');
+        }
+      } else if (currentView === 'graph') {
+        rebuildGraphLayout(ruleId);
+      }
+    }
+
+    function navigateHistory(direction) {
+      const newPointer = historyPointer + direction;
+      if (newPointer >= 0 && newPointer < historyStack.length) {
+        historyPointer = newPointer;
+        const targetId = historyStack[historyPointer];
+        jumpToRule(targetId, false);
+      }
+    }
+
+    function updateBreadcrumbUI() {
+      const btnBack = document.getElementById('btnNavBack');
+      const btnForward = document.getElementById('btnNavForward');
+      const container = document.getElementById('breadcrumbsList');
+
+      btnBack.disabled = historyPointer <= 0;
+      btnForward.disabled = historyPointer >= historyStack.length - 1;
+
+      container.innerHTML = '';
+      historyStack.forEach((ruleId, idx) => {
+        if (idx > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'text-slate-600 text-[10px]';
+          sep.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+          container.appendChild(sep);
+        }
+
+        const crumb = document.createElement('button');
+        const isActive = idx === historyPointer;
+        crumb.className = `px-2 py-0.5 rounded transition ${
+          isActive 
+            ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/40' 
+            : 'hover:bg-dark-700 text-slate-400'
+        }`;
+        crumb.textContent = ruleId;
+        crumb.onclick = () => {
+          historyPointer = idx;
+          jumpToRule(ruleId, false);
+        };
+        container.appendChild(crumb);
+      });
+    }
+
+    function formatEBNF(defString) {
+      // Escape raw quotes for terminals first
+      let result = defString.replace(/'([^']+)'/g, (match, p1) => {
+        // Highlight keywords or operators
+        if (/^[a-zA-Z_]+$/.test(p1)) {
+          return `<span class="t-token kw-token">'${p1}'</span>`;
+        } else {
+          return `<span class="t-token op-token">'${p1}'</span>`;
+        }
+      });
+
+      // Format non-terminals into clickable badges
+      result = result.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (match) => {
+        if (ruleSet.has(match)) {
+          return `<span class="nt-token" onclick="jumpToRule('${match}')">${match}</span>`;
+        }
+        return match;
+      });
+
+      // Format EBNF meta operators (| ? * +)
+      result = result.replace(/(\||;|\?|\*|\+)/g, '<span class="text-slate-500 font-bold px-1">$1</span>');
+
+      return result;
+    }
+
+    function renderSidebarList() {
+      const container = document.getElementById('sidebarRuleList');
+      container.innerHTML = '';
+
+      const query = document.getElementById('searchInput').value.toLowerCase();
+
+      GRAMMAR_DATA.forEach(rule => {
+        if (activeFilterCategory !== 'all' && rule.category !== activeFilterCategory) return;
+        if (query && !rule.id.toLowerCase().includes(query) && !rule.summary.toLowerCase().includes(query)) return;
+
+        const item = document.createElement('div');
+        item.id = `side-rule-${rule.id}`;
+        item.className = 'sidebar-rule-item p-2 rounded-lg cursor-pointer hover:bg-dark-700 border border-transparent transition flex items-center justify-between text-xs group';
+        item.onclick = () => jumpToRule(rule.id);
+
+        item.innerHTML = `
+          <div class="truncate">
+            <div class="font-mono font-medium text-slate-200 group-hover:text-blue-400 transition">${rule.id}</div>
+            <div class="text-[10px] text-slate-500 truncate">${rule.summary}</div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 opacity-0 group-hover:opacity-100 transition"></i>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function renderCardsView() {
+      const container = document.getElementById('ruleCardsContainer');
+      container.innerHTML = '';
+
+      GRAMMAR_DATA.forEach(rule => {
+        const card = document.createElement('div');
+        card.id = `card-${rule.id}`;
+        card.className = 'rule-card bg-dark-800 border border-dark-border rounded-xl p-5 shadow-lg transition-all duration-300';
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between border-b border-dark-border/60 pb-3 mb-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-mono text-base font-bold text-blue-400">${rule.id}</h3>
+                <span class="text-[10px] bg-dark-700 text-slate-400 border border-dark-border px-2 py-0.5 rounded-full">${rule.category}</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">${rule.summary}</p>
+            </div>
+            <button onclick="jumpToRule('${rule.id}')" class="text-slate-500 hover:text-blue-400 text-xs p-1" title="Focus in Graph">
+              <i class="fa-solid fa-crosshairs"></i>
+            </button>
+          </div>
+          
+          <div class="bg-dark-900 border border-dark-border/80 rounded-lg p-4 font-mono text-xs leading-relaxed overflow-x-auto">
+            <span class="text-slate-500 mr-2 select-none">${rule.id} ::=</span>
+            ${formatEBNF(rule.def)}
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function filterRules() {
+      const input = document.getElementById('searchInput');
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (input.value) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      renderSidebarList();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      filterRules();
+    }
+
+    function setCategoryFilter(cat) {
+      activeFilterCategory = cat;
+      document.querySelectorAll('.cat-btn').forEach(btn => {
+        btn.className = "cat-btn text-slate-400 hover:bg-dark-700 px-2.5 py-1 rounded-md transition";
+      });
+      const activeBtn = document.getElementById(`cat-${cat}`);
+      if (activeBtn) {
+        activeBtn.className = "cat-btn bg-blue-600 text-white px-2.5 py-1 rounded-md font-medium shadow transition";
+      }
+      renderSidebarList();
+    }
+
+    function initGraphCanvas() {
+      canvas = document.getElementById('grammarCanvas');
+      ctx = canvas.getContext('2d');
+
+      // Mouse drag panning
+      canvas.addEventListener('mousedown', e => {
+        isDragging = true;
+        dragStart = { x: e.clientX - camera.x, y: e.clientY - camera.y };
+      });
+
+      window.addEventListener('mousemove', e => {
+        if (isDragging) {
+          camera.x = e.clientX - dragStart.x;
+          camera.y = e.clientY - dragStart.y;
+          drawGraph();
+        }
+      });
+
+      window.addEventListener('mouseup', () => { isDragging = false; });
+
+      // Mouse Wheel Zoom
+      canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+        zoomGraph(zoomFactor, e.clientX, e.clientY);
+      });
+
+      // Canvas click detection for graph nodes
+      canvas.addEventListener('click', e => {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX - rect.left - camera.x) / camera.zoom;
+        const clickY = (e.clientY - rect.top - camera.y) / camera.zoom;
+
+        for (let node of graphNodes) {
+          const dx = clickX - node.x;
+          const dy = clickY - node.y;
+          if (Math.abs(dx) < node.width / 2 && Math.abs(dy) < node.height / 2) {
+            if (node.isNonTerminal) {
+              jumpToRule(node.id);
+            }
+            break;
+          }
+        }
+      });
+    }
+
+    function resizeCanvas() {
+      if (!canvas) return;
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+
+    function zoomGraph(factor, centerX, centerY) {
+      const cx = centerX || canvas.width / 2;
+      const cy = centerY || canvas.height / 2;
+
+      const newZoom = Math.max(0.3, Math.min(2.5, camera.zoom * factor));
+      camera.x = cx - (cx - camera.x) * (newZoom / camera.zoom);
+      camera.y = cy - (cy - camera.y) * (newZoom / camera.zoom);
+      camera.zoom = newZoom;
+
+      drawGraph();
+    }
+
+    function resetGraphView() {
+      camera = { x: canvas.width / 2, y: canvas.height / 2, zoom: 1 };
+      drawGraph();
+    }
+
+    // Rebuild visual radial tree/graph centered on active rule
+    function rebuildGraphLayout(centerRuleId) {
+      document.getElementById('graphNodeFocusText').textContent = `Focus: ${centerRuleId}`;
+      const centerRule = ruleMap.get(centerRuleId);
+      if (!centerRule) return;
+
+      graphNodes = [];
+      graphEdges = [];
+
+      // Center Node
+      const rootNode = {
+        id: centerRule.id,
+        label: centerRule.id,
+        x: 0,
+        y: 0,
+        width: 140,
+        height: 40,
+        type: 'root',
+        isNonTerminal: true
+      };
+      graphNodes.push(rootNode);
+
+      // Extract referenced symbols inside definition
+      const rawDef = centerRule.def;
+      const tokens = Array.from(new Set(rawDef.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []));
+      const terminals = Array.from(new Set((rawDef.match(/'[^']+'/g) || []).map(t => t.replace(/'/g, ''))));
+
+      // Dependent nodes positioning in orbit
+      let childIndex = 0;
+      const totalChildren = tokens.length + Math.min(terminals.length, 6);
+      const radius = 220;
+
+      tokens.forEach(tok => {
+        if (ruleSet.has(tok) && tok !== centerRuleId) {
+          const angle = (childIndex / Math.max(totalChildren, 1)) * Math.PI * 2;
+          const nx = Math.cos(angle) * radius;
+          const ny = Math.sin(angle) * radius;
+
+          const childNode = {
+            id: tok,
+            label: tok,
+            x: nx,
+            y: ny,
+            width: 120,
+            height: 36,
+            type: 'child-nt',
+            isNonTerminal: true
+          };
+          graphNodes.push(childNode);
+          graphEdges.push({ from: rootNode, to: childNode });
+          childIndex++;
+        }
+      });
+
+      terminals.slice(0, 6).forEach(term => {
+        const angle = (childIndex / Math.max(totalChildren, 1)) * Math.PI * 2;
+        const nx = Math.cos(angle) * radius;
+        const ny = Math.sin(angle) * radius;
+
+        const termNode = {
+          id: `term-${term}`,
+          label: `"${term}"`,
+          x: nx,
+          y: ny,
+          width: 90,
+          height: 32,
+          type: 'child-t',
+          isNonTerminal: false
+        };
+        graphNodes.push(termNode);
+        graphEdges.push({ from: rootNode, to: termNode });
+        childIndex++;
+      });
+
+      // Set camera centered
+      camera.x = canvas.width / 2;
+      camera.y = canvas.height / 2;
+      camera.zoom = 1;
+
+      drawGraph();
+    }
+
+    function drawGraph() {
+      if (!ctx) return;
+
+      // Clear Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.translate(camera.x, camera.y);
+      ctx.scale(camera.zoom, camera.zoom);
+
+      // Draw Edges
+      graphEdges.forEach(edge => {
+        ctx.beginPath();
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+        ctx.strokeStyle = '#2a3241';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      // Draw Nodes
+      graphNodes.forEach(node => {
+        ctx.save();
+        ctx.translate(node.x, node.y);
+
+        // Background Box
+        ctx.beginPath();
+        const rw = node.width;
+        const rh = node.height;
+        ctx.roundRect(-rw/2, -rh/2, rw, rh, 8);
+
+        if (node.type === 'root') {
+          ctx.fillStyle = '#3b82f6';
+          ctx.shadowColor = 'rgba(59, 130, 246, 0.5)';
+          ctx.shadowBlur = 15;
+        } else if (node.type === 'child-nt') {
+          ctx.fillStyle = '#0891b2';
+          ctx.shadowBlur = 0;
+        } else {
+          ctx.fillStyle = '#ec4899';
+          ctx.shadowBlur = 0;
+        }
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = node.type === 'root' ? 2 : 1;
+        ctx.stroke();
+
+        // Label Text
+        ctx.font = node.type === 'root' ? 'bold 13px "Fira Code"' : '12px "Fira Code"';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.label, 0, 1);
+
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    function inspectCodeSyntax() {
+      const code = document.getElementById('codeInspectorInput').value;
+      const tokenOutput = document.getElementById('inspectorTokensOutput');
+      const traceOutput = document.getElementById('inspectorRulesTrace');
+
+      tokenOutput.innerHTML = '';
+      traceOutput.innerHTML = '';
+
+      if (!code.trim()) {
+        tokenOutput.innerHTML = '<span class="text-slate-500 text-xs">Enter code above to analyze grammar tokens.</span>';
+        return;
+      }
+
+      // Simple Lexical Tokenizer for JS 1.1 Grammar
+      const tokenRegex = /\b(var|if|else|while|for|function|return|new|this|typeof|delete|void|in|with|break|continue|null|true|false)\b|("[^"]*"|'[^']*')|(\d+(\.\d+)?)|([a-zA-Z_$][a-zA-Z0-9_$]*)|(==|!=|<=|>=|<<|>>|>>>|\+\+|--|\&\&|\|\||[\+\-\*\/%=\&\|\^\!\<\>;,\{\}\(\)\[\]])/g;
+
+      let match;
+      const tokens = [];
+      const rulesInvoked = new Set();
+
+      while ((match = tokenRegex.exec(code)) !== null) {
+        const val = match[0];
+        let type = 'Identifier';
+        let mappedRule = 'PrimaryExpression';
+
+        if (match[1]) {
+          type = 'Keyword';
+          if (val === 'var') mappedRule = 'VariableStatement';
+          else if (val === 'if' || val === 'else') mappedRule = 'IfStatement';
+          else if (val === 'while' || val === 'for') mappedRule = 'IterationStatement';
+          else if (val === 'function') mappedRule = 'FunctionDeclaration';
+          else if (val === 'return') mappedRule = 'ReturnStatement';
+        } else if (match[2]) {
+          type = 'StringLiteral';
+          mappedRule = 'Literal';
+        } else if (match[3]) {
+          type = 'NumericLiteral';
+          mappedRule = 'Literal';
+        } else if (match[5]) {
+          type = 'Identifier';
+          mappedRule = 'PrimaryExpression';
+        } else if (match[6]) {
+          type = 'Operator/Punctuator';
+          mappedRule = 'AssignmentOperator';
+        }
+
+        tokens.push({ val, type, mappedRule });
+        rulesInvoked.add(mappedRule);
+      }
+
+      // Render Token Badges
+      tokens.forEach(tok => {
+        const badge = document.createElement('span');
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono border border-dark-border bg-dark-800 shadow-sm cursor-pointer hover:border-blue-500 transition";
+        badge.onclick = () => jumpToRule(tok.mappedRule);
+
+        let color = "text-slate-300";
+        if (tok.type === 'Keyword') color = "text-purple-400 font-bold";
+        else if (tok.type === 'StringLiteral') color = "text-green-400";
+        else if (tok.type === 'NumericLiteral') color = "text-amber-400";
+        else if (tok.type === 'Identifier') color = "text-blue-300";
+
+        badge.innerHTML = `
+          <span class="${color}">${escapeHtml(tok.val)}</span>
+          <span class="text-[9px] text-slate-500 bg-dark-900 px-1 rounded">${tok.mappedRule}</span>
+        `;
+        tokenOutput.appendChild(badge);
+      });
+
+      // Render Rule Hierarchy Inferences
+      rulesInvoked.add('Program');
+      rulesInvoked.add('SourceElements');
+      rulesInvoked.add('Statement');
+
+      Array.from(rulesInvoked).forEach(ruleId => {
+        const rObj = ruleMap.get(ruleId);
+        if (!rObj) return;
+
+        const row = document.createElement('div');
+        row.className = "p-2 bg-dark-900 rounded-lg border border-dark-border/60 flex items-center justify-between";
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-cube text-blue-400 text-xs"></i>
+            <span class="text-blue-300 font-bold cursor-pointer hover:underline" onclick="jumpToRule('${rObj.id}')">${rObj.id}</span>
+            <span class="text-slate-500 text-[11px]">- ${rObj.summary}</span>
+          </div>
+          <button onclick="jumpToRule('${rObj.id}')" class="text-xs text-slate-400 hover:text-white bg-dark-800 px-2 py-0.5 rounded border border-dark-border">
+            Inspect Rule
+          </button>
+        `;
+        traceOutput.appendChild(row);
+      });
+    }
+
+    function loadSampleCode(num) {
+      const textarea = document.getElementById('codeInspectorInput');
+      if (num === 1) {
+        textarea.value = `var limit = 100;\nif (limit >= 50) {\n  var result = "JS 1.1";\n}`;
+      } else if (num === 2) {
+        textarea.value = `function calculateTotal(price, tax) {\n  return price + (price * tax);\n}`;
+      } else if (num === 3) {
+        textarea.value = `var isReady = true;\nvar items = [1, 2, 3];\nvar obj = { key: "value" };`;
+      }
+      inspectCodeSyntax();
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function openInfoModal() {
+      document.getElementById('infoModal').classList.remove('hidden');
+    }
+
+    function closeInfoModal() {
+      document.getElementById('infoModal').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
